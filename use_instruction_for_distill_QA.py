@@ -31,9 +31,11 @@ def _process_one(
     instruction: str,
     system_prompt: str,
     model_name: str,
-) -> Tuple[int, Optional[dict[str, Any]]]:
+) -> Tuple[int, dict[str, Any]]:
     """
-    处理单条数据。返回 (原始序号, 输出对象)，失败时返回 (index, None)。
+    处理单条数据。返回 (原始序号, 输出对象)。
+    - 成功时：{"instruction": ..., "response": "..."}
+    - 失败时：{"instruction": ..., "response": None, "error": "错误信息", "error_type": "异常类名"}
     对连接/超时类错误自动重试最多 MAX_RETRIES 次（指数退避）。
     """
     last_error: Optional[Exception] = None
@@ -57,10 +59,26 @@ def _process_one(
                 time.sleep(wait)
             else:
                 print(f"[警告] 处理第 {index + 1} 条失败: {e}")
-                return (index, None)
+                return (
+                    index,
+                    {
+                        "instruction": instruction,
+                        "response": None,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    },
+                )
 
     print(f"[警告] 处理第 {index + 1} 条失败（已重试 {MAX_RETRIES} 次）: {last_error}")
-    return (index, None)
+    return (
+        index,
+        {
+            "instruction": instruction,
+            "response": None,
+            "error": str(last_error),
+            "error_type": type(last_error).__name__ if last_error else "UnknownError",
+        },
+    )
 
 
 def process_jsonl(
@@ -105,6 +123,8 @@ def process_jsonl(
     pending: dict[int, dict[str, Any]] = {}
     items_iter = iter(items)
     total = len(items)
+    success_count = 0
+    failure_count = 0
 
     def submit_next():
         try:
@@ -129,10 +149,22 @@ def process_jsonl(
                 for future in as_completed(future_to_index):
                     index, out_obj = future.result()
                     done_count += 1
+
+                    # 统计成功 / 失败数
+                    if isinstance(out_obj, dict) and (
+                        "error" in out_obj or out_obj.get("response") is None
+                    ):
+                        failure_count += 1
+                    else:
+                        success_count += 1
+
                     if done_count % 5 == 0 or done_count == total:
-                        print(f"[进度] 已完成 {done_count}/{total} 条")
-                    if out_obj is not None:
-                        pending[index] = out_obj
+                        print(
+                            f"[进度] 已完成 {done_count}/{total} 条（成功 {success_count} 条，失败 {failure_count} 条）"
+                        )
+
+                    # 无论成功或失败，都写入 pending，保证输出和有效输入条数一致
+                    pending[index] = out_obj
                     # 按原始顺序连续写出能连上的部分
                     while next_to_write in pending:
                         obj = pending.pop(next_to_write)
@@ -150,7 +182,7 @@ def process_jsonl(
         for idx in sorted(pending.keys()):
             fout.write(json.dumps(pending[idx], ensure_ascii=False) + "\n")
             fout.flush()
-    print(f"[完成] 已写入 {output_path}")
+        print(f"[完成] 已写入 {output_path}")
 
 
 if __name__ == "__main__":
