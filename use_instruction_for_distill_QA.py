@@ -163,13 +163,15 @@ def process_jsonl(
                             f"[进度] 已完成 {done_count}/{total} 条（成功 {success_count} 条，失败 {failure_count} 条）"
                         )
 
-                    # 无论成功或失败，都写入 pending，保证输出和有效输入条数一致
+                    # 无论成功或失败，都暂存到 pending，以保证按原始顺序处理
                     pending[index] = out_obj
                     # 按原始顺序连续写出能连上的部分
                     while next_to_write in pending:
                         obj = pending.pop(next_to_write)
-                        fout.write(json.dumps(obj, ensure_ascii=False) + "\n")
-                        fout.flush()
+                        # 仅当 response 不为 None 时才写入输出文件
+                        if obj.get("response") is not None:
+                            fout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+                            fout.flush()
                         next_to_write += 1
                     # 完成一个就再提交一个，保持并发数受控
                     del future_to_index[future]
@@ -178,10 +180,12 @@ def process_jsonl(
                         future_to_index[new_fut] = new_idx
                     break  # 只处理一个完成的任务，再循环 as_completed
 
-        # 若有因顺序未写出的，按序补写
+        # 若有因顺序未处理完的，按序补写（同样只写入 response 不为 None 的结果）
         for idx in sorted(pending.keys()):
-            fout.write(json.dumps(pending[idx], ensure_ascii=False) + "\n")
-            fout.flush()
+            obj = pending[idx]
+            if obj.get("response") is not None:
+                fout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+                fout.flush()
         print(f"[完成] 已写入 {output_path}")
 
 
