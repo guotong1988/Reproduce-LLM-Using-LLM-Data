@@ -50,7 +50,14 @@ def _process_one(
                 timeout=600
             )
             response = build_response(content, reasoning_content)
-            return (index, {"instruction": instruction, "response": response})
+            return (
+                index,
+                {
+                    "instruction": instruction,
+                    "response": response,
+                    "system": "You are a helpful assistant.",
+                },
+            )
         except Exception as e:
             last_error = e
             if attempt < MAX_RETRIES and _is_retryable_error(e):
