@@ -1,4 +1,4 @@
-# capability x domain x difficulty
+# capability x domain x difficulty x nlp_task
 
 capability = {}
 
@@ -245,6 +245,19 @@ difficulty["Level-1"] = ["简单指令，单轮对话"]
 difficulty["Level-2"] = ["复杂指令，需要多步推理"]
 difficulty["Level-3"] = ["专家级任务"]
 
+# NLP 任务类型：约束指令形态（问答/摘要/翻译等）
+nlp_task = {}
+nlp_task["问答"] = ["用户提出问题，模型给出直接回答；可含多轮澄清"]
+nlp_task["摘要"] = ["对给定文本或对话进行压缩、提炼要点与结构"]
+nlp_task["翻译"] = ["跨语言互译或语域/风格对齐的译写"]
+nlp_task["改写"] = ["同义改写、风格迁移、扩写缩写、语气调整等"]
+nlp_task["分类"] = ["打标签、主题/意图分类、多标签或层次分类"]
+nlp_task["信息抽取"] = ["实体、关系、事件、表格字段等结构化抽取"]
+nlp_task["推理"] = ["链式推理、约束求解、比较与论证"]
+nlp_task["代码"] = ["编写、解释、调试、重构、测试或接口设计等代码相关任务"]
+nlp_task["工具调用格式"] = ["函数/工具 JSON、API 参数、命令行或检索查询等可执行调用形态"]
+nlp_task["安全拒答"] = ["不当/越界请求下礼貌拒绝、边界说明与合规引导"]
+
 import json
 import time
 from typing import Dict, Any
@@ -259,9 +272,10 @@ def build_user_prompt(
     dom_key: str,
     dom_item: str,
     diff_key: str,
+    nlp_key: str,
 ) -> str:
     """
-    根据能力 / 领域 / 难度构造给大模型的提示词，
+    根据能力 / 领域 / 难度 / NLP 任务类型构造给大模型的提示词，
     让大模型只返回一条「用户指令 / prompt」的 JSON。
     其中每条指令只对应一个最细粒度的能力子项与领域子项。
     """
@@ -270,6 +284,8 @@ def build_user_prompt(
     dom_desc = dom_item
     diff_desc_list = difficulty.get(diff_key, [])
     diff_desc = diff_desc_list[0] if diff_desc_list else ""
+    nlp_desc_list = nlp_task.get(nlp_key, [])
+    nlp_desc = nlp_desc_list[0] if nlp_desc_list else ""
 
     prompt = f"""
 请你根据下面的信息，设计一条高质量的指令 / prompt，
@@ -281,11 +297,13 @@ def build_user_prompt(
 - 领域细分示例: {dom_desc}
 - 难度等级: {diff_key}
 - 难度说明: {diff_desc}
+- NLP 任务类型: {nlp_key}
+- NLP 任务说明: {nlp_desc}
 
 请你生成一条「用户提问 / 指令」（instruction/prompt），要求：
 1. 仅构造用户侧指令，不需要任何回答内容
 2. 内容尽量用中文，可以夹杂必要的英文术语
-3. 真实、有用、具有代表性，能体现上述能力、领域和难度
+3. 真实、有用、具有代表性，能体现上述能力、领域、难度与 NLP 任务形态（指令应符合所选 NLP 任务类型）
 
 请你**只输出一个 JSON 对象**，不要任何多余文字，字段包括：
 - "instruction": 用户的指令 / prompt 文本
@@ -314,11 +332,11 @@ def generate_data(
     max_workers: int = 10,
 ) -> None:
     """
-    遍历 capability x domain x difficulty，每种组合生成 num_per_combination 条「指令 / prompt」，
+    遍历 capability x domain x difficulty x nlp_task，每种组合生成 num_per_combination 条「指令 / prompt」，
     只包含指令及元信息（后续再二次调用大模型生成 response），并写入 JSONL 文件。
     """
     system_content = (
-        "你是一个高质量指令生成助手，负责根据给定的能力、领域和难度，"
+        "你是一个高质量指令生成助手，负责根据给定的能力、领域、难度与 NLP 任务类型，"
         "生成用于指令微调的大模型指令（instruction/prompt）。务必严格按照用户要求输出 JSON，"
         "且只生成用户指令，不要生成回答。"
     )
@@ -331,6 +349,7 @@ def generate_data(
         dom_key: str,
         dom_item: str,
         diff_key: str,
+        nlp_key: str,
         idx: int,
     ):
         user_content = build_user_prompt(
@@ -339,6 +358,7 @@ def generate_data(
             dom_key,
             dom_item,
             diff_key,
+            nlp_key,
         )
 
         try:
@@ -354,7 +374,7 @@ def generate_data(
         except Exception as e:
             print(
                 f"[ERROR] 调用大模型失败: cap={cap_key}, "
-                f"dom={dom_key}, diff={diff_key}, idx={idx}, err={e}"
+                f"dom={dom_key}, diff={diff_key}, nlp={nlp_key}, idx={idx}, err={e}"
             )
             return None
 
@@ -369,7 +389,7 @@ def generate_data(
         except Exception as e:
             print(
                 f"[WARN] 解析 JSON 失败，忽略该条数据: "
-                f"cap={cap_key}, dom={dom_key}, diff={diff_key}, idx={idx}, err={e}"
+                f"cap={cap_key}, dom={dom_key}, diff={diff_key}, nlp={nlp_key}, idx={idx}, err={e}"
             )
             return None
 
@@ -378,11 +398,12 @@ def generate_data(
         sample.setdefault("capability", f"{cap_key}({cap_item})")
         sample.setdefault("domain", f"{dom_key}({dom_item})")
         sample.setdefault("difficulty", diff_key)
+        sample.setdefault("nlp_task", nlp_key)
 
         if sleep_seconds > 0:
             time.sleep(sleep_seconds)
 
-        return sample, cap_key, cap_item, dom_key, dom_item, diff_key
+        return sample, cap_key, cap_item, dom_key, dom_item, diff_key, nlp_key
 
     with open(output_path, "w", encoding="utf-8") as fout:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -394,18 +415,20 @@ def generate_data(
                     for cap_item in cap_list:
                         for dom_item in dom_list:
                             for diff_key in difficulty.keys():
-                                for i in range(num_per_combination):
-                                    futures.append(
-                                        executor.submit(
-                                            _worker,
-                                            cap_key,
-                                            cap_item,
-                                            dom_key,
-                                            dom_item,
-                                            diff_key,
-                                            i,
+                                for nlp_key in nlp_task.keys():
+                                    for i in range(num_per_combination):
+                                        futures.append(
+                                            executor.submit(
+                                                _worker,
+                                                cap_key,
+                                                cap_item,
+                                                dom_key,
+                                                dom_item,
+                                                diff_key,
+                                                nlp_key,
+                                                i,
+                                            )
                                         )
-                                    )
 
             for future in as_completed(futures):
                 result = future.result()
@@ -419,6 +442,7 @@ def generate_data(
                     dom_key,
                     dom_item,
                     diff_key,
+                    nlp_key,
                 ) = result
 
                 fout.write(json.dumps(sample, ensure_ascii=False) + "\n")
@@ -427,12 +451,12 @@ def generate_data(
 
                 print(
                     f"[OK] 写入样本 #{total_written}: "
-                    f"{cap_key}({cap_item}) | {dom_key}({dom_item}) | {diff_key}"
+                    f"{cap_key}({cap_item}) | {dom_key}({dom_item}) | {diff_key} | {nlp_key}"
                 )
 
     print(f"完成蒸馏，最终写入样本数量: {total_written}, 输出文件: {output_path}")
 
 
 if __name__ == "__main__":
-    # 默认：每种 (capability x domain x difficulty) 组合生成 5 条数据
+    # 默认：每种 (capability x domain x difficulty x nlp_task) 组合生成 5 条数据
     generate_data()
