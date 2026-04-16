@@ -329,12 +329,12 @@ Output only one JSON object with no extra text. The object must contain:
 
 
 def generate_data(
-    num_per_combination: int = 5,
-    output_path: str = "distill_instruction_prompt_en.jsonl",
+    num_per_combination: int = 2,
+    output_path: str = "deepseek_prompts_en.jsonl",
 ) -> None:
     """
     Iterate over capability x domain x difficulty x nlp_task and write input parameters
-    for any LLM inference interface into JSONL (one request object per line),
+    for deepseek_infer.get_response into JSONL (one request object per line),
     for downstream batch inference.
     """
     system_content = (
@@ -363,7 +363,7 @@ def generate_data(
                                         nlp_key,
                                     )
                                     record: Dict[str, Any] = {
-                                        # These fields can be used directly by any LLM inference interface downstream.
+                                        # These fields can be used directly by deepseek_infer.get_response downstream.
                                         "system_content": system_content,
                                         "user_content": user_content,
                                         # Keep tags for tracking and analysis.
