@@ -292,7 +292,7 @@ def build_user_prompt(
 ) -> str:
     """
     Build an instruction-generation prompt from capability/domain/difficulty/NLP task type.
-    The model must return only one JSON object containing a user instruction/prompt.
+    The model must return only one user instruction/prompt text.
     Each instruction should correspond to exactly one fine-grained capability item and one domain item.
     """
     # Each instruction targets one concrete capability sub-item and one domain sub-item.
@@ -339,7 +339,7 @@ def generate_data(
     system_content = (
         "You are a high-quality instruction generation assistant. "
         "Given capability, domain, difficulty, and NLP task type, generate an instruction "
-        "(instruction/prompt) for instruction tuning. Strictly output JSON as requested, "
+        "(instruction/prompt) for instruction tuning. Strictly output plain text, "
         "and generate only the user instruction, not the answer."
     )
 
@@ -370,6 +370,7 @@ def generate_data(
                                         "domain": f"{dom_key}({dom_item})",
                                         "difficulty": diff_key,
                                         "nlp_task": nlp_key,
+                                        "index": i,
                                     }
 
                                     fout.write(json.dumps(record, ensure_ascii=False) + "\n")
