@@ -25,6 +25,6 @@ curl http://localhost:8000/v1/chat/completions \
 ```
 
 ## Eval Results
-| **Base Model**   | **C-Eval** | 
-| ----------- | ------------------------------------- | 
-| Qwen3-32B-Base    | 0.7077                     |
+| **Base Model**   | **Dataset** | **C-Eval** | 
+| ----------- | ----------------- ｜ -------------------- | 
+| Qwen3-32B-Base  |  | 0.7077                     |
