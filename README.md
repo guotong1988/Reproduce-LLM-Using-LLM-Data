@@ -26,5 +26,5 @@ curl http://localhost:8000/v1/chat/completions \
 
 ## Eval Results
 | **Base Model**   | **Dataset** | **C-Eval** | 
-| ----------- | ------------------------------------- | ------------------------------------- | 
+| ----------- | ----------- | ----------- | 
 | Qwen3-32B-Base  | [Link](https://modelscope.cn/datasets/guotong1988/distill-deepseekV3.2-48w-dataset), Non-thinking | 0.7077                     |
